@@ -26,7 +26,7 @@ WIN = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
 pygame.display.set_caption("Flappy Bird")
 
 pipe_img = pygame.transform.scale2x(pygame.image.load(os.path.join("imgs","pipe.png")).convert_alpha())
-bg_img = pygame.transform.scale(pygame.image.load(os.path.join("imgs","bg.png")).convert_alpha(), (600, 900))
+bg_img = pygame.transform.scale(pygame.image.load(os.path.join("imgs","background.png")).convert_alpha(), (600, 900))
 bird_images = [pygame.transform.scale2x(pygame.image.load(os.path.join("imgs","bird" + str(x) + ".png"))) for x in range(1,4)]
 base_img = pygame.transform.scale2x(pygame.image.load(os.path.join("imgs","base.png")).convert_alpha())
 
@@ -36,9 +36,9 @@ class Bird:
     """
     Bird class representing the flappy bird
     """
-    MAX_ROTATION = 25
+    #MAX_ROTATION = 25
     IMGS = bird_images
-    ROT_VEL = 20
+    #ROT_VEL = 20
     ANIMATION_TIME = 5
 
     def __init__(self, x, y):
@@ -50,7 +50,8 @@ class Bird:
         """
         self.x = x
         self.y = y
-        self.tilt = 0  # degrees to tilt
+        self.dir = 1
+        # self.tilt = 0  # degrees to tilt
         self.tick_count = 0
         self.vel = 0
         self.height = self.y
@@ -62,7 +63,9 @@ class Bird:
         make the bird jump
         :return: None
         """
-        self.vel = -10.5
+        self.dir *= -1
+        # self.vel = -10.5
+        self.vel = 0
         self.tick_count = 0
         self.height = self.y
 
@@ -74,23 +77,31 @@ class Bird:
         self.tick_count += 1
 
         # for downward acceleration
-        displacement = self.vel*(self.tick_count) + 0.5*(3)*(self.tick_count)**2  # calculate displacement
+        #displacement = self.vel*(self.tick_count) + 0.5*(3)*(self.tick_count)**2  # calculate displacement
+        #displacement = self.vel*(self.tick_count) + self.dir*0.5*(3)*(self.tick_count)**2
+        self.vel += self.dir*2
 
         # terminal velocity
-        if displacement >= 16:
-            displacement = (displacement/abs(displacement)) * 16
+        if self.vel >= 16:
+            self.vel = 16
+        if self.vel <= -16:
+            self.vel = -16
 
-        if displacement < 0:
-            displacement -= 2
+        #bird.y + bird.img.get_height() - 10 >= FLOOR or bird.y < -50:
 
-        self.y = self.y + displacement
+        self.y = self.y + self.vel
 
-        if displacement < 0 or self.y < self.height + 50:  # tilt up
-            if self.tilt < self.MAX_ROTATION:
-                self.tilt = self.MAX_ROTATION
-        else:  # tilt down
-            if self.tilt > -90:
-                self.tilt -= self.ROT_VEL
+        if self.y < 0:
+            self.y = 0
+        if self.y > FLOOR + 10 - self.img.get_height():
+            self.y = FLOOR + 10 - self.img.get_height()
+
+        # if displacement < 0 or self.y < self.height + 50:  # tilt up
+        #     if self.tilt < self.MAX_ROTATION:
+        #         self.tilt = self.MAX_ROTATION
+        # else:  # tilt down
+        #     if self.tilt > -90:
+        #         self.tilt -= self.ROT_VEL
 
     def draw(self, win):
         """
@@ -113,14 +124,14 @@ class Bird:
             self.img = self.IMGS[0]
             self.img_count = 0
 
-        # so when bird is nose diving it isn't flapping
-        if self.tilt <= -80:
-            self.img = self.IMGS[1]
-            self.img_count = self.ANIMATION_TIME*2
+        # # so when bird is nose diving it isn't flapping
+        # if self.tilt <= -80:
+        #     self.img = self.IMGS[1]
+        #     self.img_count = self.ANIMATION_TIME*2
 
 
         # tilt the bird
-        blitRotateCenter(win, self.img, (self.x, self.y), self.tilt)
+        blitRotateCenter(win, self.img, (self.x, self.y), 0)
 
     def get_mask(self):
         """
@@ -337,7 +348,7 @@ def eval_genomes(genomes, config):
 
     run = True
     while run and len(birds) > 0:
-        clock.tick(30)
+        # clock.tick(30)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -356,10 +367,11 @@ def eval_genomes(genomes, config):
             bird.move()
 
             # send bird location, top pipe location and bottom pipe location and determine from network whether to jump or not
-            output = nets[birds.index(bird)].activate((bird.y, abs(bird.y - pipes[pipe_ind].height), abs(bird.y - pipes[pipe_ind].bottom)))
+            output = nets[birds.index(bird)].activate((bird.y, bird.dir, abs(bird.y - pipes[pipe_ind].height), abs(bird.y - pipes[pipe_ind].bottom)))
 
             if output[0] > 0.5:  # we use a tanh activation function so result will be between -1 and 1. if over 0.5 jump
-                bird.jump()
+                if bird.tick_count > 5:
+                    bird.jump()
 
         base.move()
 
@@ -367,7 +379,7 @@ def eval_genomes(genomes, config):
         add_pipe = False
         for pipe in pipes:
             pipe.move()
-            # check for collision
+            # check for collision TODO
             for bird in birds:
                 if pipe.collide(bird, win):
                     ge[birds.index(bird)].fitness -= 1
@@ -392,11 +404,11 @@ def eval_genomes(genomes, config):
         for r in rem:
             pipes.remove(r)
 
-        for bird in birds:
-            if bird.y + bird.img.get_height() - 10 >= FLOOR or bird.y < -50:
-                nets.pop(birds.index(bird))
-                ge.pop(birds.index(bird))
-                birds.pop(birds.index(bird))
+        # for bird in birds:
+        #     if bird.y + bird.img.get_height() - 10 >= FLOOR or bird.y < -50:
+        #         nets.pop(birds.index(bird))
+        #         ge.pop(birds.index(bird))
+        #         birds.pop(birds.index(bird))
 
         draw_window(WIN, birds, pipes, base, score, gen, pipe_ind)
 
